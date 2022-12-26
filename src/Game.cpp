@@ -1,11 +1,16 @@
-//
-//  Game.cpp
-//  SDL2 window
-//
-//  Created by Aliaksandr on 21.12.22.
-//
-
 #include "Game.h"
+#include "InputHandler.h"
+
+Game* Game::s_pInstance = 0;
+
+Game* Game::Instance()
+{
+    if (s_pInstance == 0) {
+        s_pInstance = new Game();
+    }
+
+    return s_pInstance;
+}
 
 bool Game::init(const char *title, int xpos, int ypos, int width, int height, bool fullscreen)
 {
@@ -27,7 +32,7 @@ bool Game::init(const char *title, int xpos, int ypos, int width, int height, bo
             
             if (m_pRenderer != 0) {
                 std::cout << "renderer creation success\n";
-                SDL_SetRenderDrawColor(m_pRenderer, 255, 255, 255, 255);
+                SDL_SetRenderDrawColor(m_pRenderer, 255, 0, 0, 255);
             } else {
                 std::cout << "renderer init failed\n";
                 return false;
@@ -40,25 +45,23 @@ bool Game::init(const char *title, int xpos, int ypos, int width, int height, bo
         std::cout << "SDL init failed\n";
         return false;
     }
-    
-    SDL_Surface* pTempSurface = SDL_LoadBMP("assets/duck.bmp");
-    
-    if (!pTempSurface) {
-        std::cout << "SDL load bmp failed\n";
+
+    if (!TheTextureManager::Instance()->load("assets/donkey.png", "donkey", m_pRenderer)) {
         return false;
     }
+
+    if (!TheTextureManager::Instance()->load("assets/duck.bmp", "duck", m_pRenderer)) {
+        return false;
+    }
+
+    TheInputHandler::Instance()->initializeJoysticks();
+
+    Player* player = new Player(new LoaderParams(300, 300, 128, 128, "donkey"));
+    Enemy* enemy = new Enemy(new LoaderParams(0, 0, 128, 128, "duck"));
     
-    m_pTexture = SDL_CreateTextureFromSurface(m_pRenderer, pTempSurface);
-    
-    SDL_FreeSurface(pTempSurface);
-    
-    SDL_QueryTexture(m_pTexture, NULL, NULL, &m_sourceRect.w, &m_sourceRect.h);
-    m_destRect.x = m_sourceRect.x = 0;
-    m_destRect.y = m_sourceRect.y = 0;
-    m_destRect.w = m_sourceRect.w = 50;
-    m_destRect.h = m_sourceRect.h = 50;
-    std::cout << m_sourceRect.w << " " << m_sourceRect.h << "\n";
-    
+    m_gameObjects.push_back(player);
+    m_gameObjects.push_back(enemy);
+
     std::cout << "init success\n";
     m_bRunning = true;
     
@@ -70,33 +73,39 @@ void Game::render()
     
     SDL_RenderClear(m_pRenderer);
     
-    SDL_RenderCopy(m_pRenderer, m_pTexture, &m_sourceRect, &m_destRect);
+    for (std::vector<GameObject*>::size_type i = 0; i != m_gameObjects.size(); i++) {
+        m_gameObjects[i]->draw();
+    }
     
     SDL_RenderPresent(m_pRenderer);
     
 }
 
-void Game::update() {}
+void Game::update() 
+{
+
+    m_currentFrame =int((SDL_GetTicks() / 100) % 6);
+    for (std::vector<GameObject*>::size_type i = 0; i != m_gameObjects.size(); i++) {
+        m_gameObjects[i]->update();
+    }
+
+}
 
 void Game::handleEvents()
 {
-    SDL_Event event;
-    
-    if (SDL_PollEvent(&event)) {
-        switch (event.type) {
-            case SDL_QUIT:
-                m_bRunning = false;
-                break;
-            default:
-                break;
-        }
-    }
+    TheInputHandler::Instance()->update();
 }
 
 void Game::clean()
 {
     std::cout << "cleaning game\n";
+    TheInputHandler::Instance()->clean();
     SDL_DestroyWindow(m_pWindow);
     SDL_DestroyRenderer(m_pRenderer);
     SDL_Quit();
+}
+
+SDL_Renderer* Game::getRenderer() const
+{
+    return m_pRenderer;
 }
